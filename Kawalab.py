@@ -27,12 +27,6 @@ RSS_URLS = [
 # 1回の実行で投稿する最大数
 MAX_POSTS_PER_RUN = 10
 
-# 強い記事キーワード
-IMPORTANT_WORDS = [
-    "新曲", "発表", "デビュー", "出演", "ライブ",
-    "イベント", "初", "決定", "公開", "話題"
-]
-
 # =========================
 # メンバー読み込み
 # =========================
@@ -89,14 +83,8 @@ for rss_url in RSS_URLS:
             continue
 
         published_time = datetime(*published[:6], tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) - published_time > timedelta(minutes=20):
+        if datetime.now(timezone.utc) - published_time > timedelta(minutes=15):
             print("⏭ 古い記事スキップ")
-            continue
-
-        # タイトル強度チェック
-        score = sum(1 for w in IMPORTANT_WORDS if w in title)
-        if score == 0:
-            print("⏭ 弱タイトル")
             continue
 
         # 投稿文
