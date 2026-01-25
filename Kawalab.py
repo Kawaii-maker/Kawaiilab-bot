@@ -1,28 +1,24 @@
 import os
-import json
-import time
 import feedparser
 import tweepy
-from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 
-# ===== X API =====
+# ======================
+# X API 認証
+# ======================
 client = tweepy.Client(
     consumer_key=os.getenv("API_KEY"),
     consumer_secret=os.getenv("API_SECRET"),
     access_token=os.getenv("ACCESS_TOKEN"),
-    access_token_secret=os.getenv("ACCESS_TOKEN_SECRET"),
+    access_token_secret=os.getenv("ACCESS_TOKEN_SECRET")
 )
 
-# ===== 設定 =====
-POSTED_FILE = "posted.json"
-JST = timezone(timedelta(hours=9))
-NOW = datetime.now(JST)
-LIMIT_TIME = NOW - timedelta(days=1)  # 1日以内
-
-# Google News RSS（日本）
+# ======================
+# Google News RSS
+# ======================
 RSS_URLS = [
     "https://news.google.com/rss/search?q=FRUITS+ZIPPER&hl=ja&gl=JP&ceid=JP:ja",
     "https://news.google.com/rss/search?q=CANDY+TUNE&hl=ja&gl=JP&ceid=JP:ja",
@@ -30,70 +26,110 @@ RSS_URLS = [
     "https://news.google.com/rss/search?q=KAWAII+LAB&hl=ja&gl=JP&ceid=JP:ja",
 ]
 
-# ===== メンバー読み込み =====
+# ======================
+# メンバー読み込み
+# ======================
 with open("members.txt", "r", encoding="utf-8") as f:
     members = [m.strip().lower() for m in f if m.strip()]
 
 print("🟩 メンバー名:", members)
 
-# ===== 投稿履歴 =====
-if os.path.exists(POSTED_FILE):
-    with open(POSTED_FILE, "r", encoding="utf-8") as f:
-        posted = json.load(f)
-else:
-    posted = {"links": [], "titles": []}
+# ======================
+# 投稿済み管理
+# ======================
+POSTED_FILE = "posted.txt"
+if not os.path.exists(POSTED_FILE):
+    open(POSTED_FILE, "w", encoding="utf-8").close()
 
-# ===== RSS 処理 =====
+with open(POSTED_FILE, "r", encoding="utf-8") as f:
+    posted_links = set(f.read().splitlines())
+
+# ======================
+# 時間条件（24時間以内）
+# ======================
+now = datetime.now(timezone.utc)
+limit_time = now - timedelta(hours=24)
+
+posted_count = 0
+MAX_POSTS = 3  # 1回の実行で最大投稿数（凍結対策）
+
+# ======================
+# RSSチェック開始
+# ======================
 for rss_url in RSS_URLS:
+    if posted_count >= MAX_POSTS:
+        break
+
     print("🔍 RSS取得:", rss_url)
     feed = feedparser.parse(rss_url)
     print("🟦 件数:", len(feed.entries))
 
     for entry in feed.entries:
+        if posted_count >= MAX_POSTS:
+            break
+
         title = entry.title
         link = entry.link
         title_lower = title.lower()
 
-        # 投稿日時チェック
-        if hasattr(entry, "published_parsed") and entry.published_parsed:
-            published = datetime.fromtimestamp(
-                time.mktime(entry.published_parsed), JST
-            )
-            if published < LIMIT_TIME:
-                continue
-        else:
-            continue  # 日付不明は除外
-
-        print("チェック中:", title)
-
-        # メンバー名マッチ
-        if not any(name in title_lower for name in members):
+        # 公開時間チェック
+        if not hasattr(entry, "published_parsed"):
             continue
 
-        # 重複防止
-        if link in posted["links"] or title in posted["titles"]:
-            print("⏭ 既に投稿済み")
+        published = datetime(
+            *entry.published_parsed[:6],
+            tzinfo=timezone.utc
+        )
+
+        if published < limit_time:
             continue
 
-        text = f"{title}\n{link}"
+        # メンバー or グループ名マッチ
+        matched = [name for name in members if name in title_lower]
+        if not matched:
+            continue
 
-        try:
-            client.create_tweet(text=text)
-            print("🚀 投稿成功:", title)
+        # 重複投稿防止
+        if link in posted_links:
+            continue
 
-            posted["links"].append(link)
-            posted["titles"].append(title)
+        related = " / ".join([m.upper() for m in matched])
 
-            with open(POSTED_FILE, "w", encoding="utf-8") as f:
-                json.dump(posted, f, ensure_ascii=False, indent=2)
+        # ======================
+        # 投稿内容（KAWAII LAB. NEWS）
+        # ======================
+        text = (
+            "📰 KAWAII LAB. NEWS\n"
+            f"タイトル：{title}\n"
+            f"関連：{related}\n"
+            "媒体：Google News\n"
+            "🕒 24h以内\n"
+            f"🔗 {link}"
+        )
 
-        except tweepy.errors.Forbidden:
-            print("⚠️ 重複ツイート（403）→ スキップ")
+        print("🚀 投稿:", title)
+        client.create_tweet(text=text)
 
-        except Exception as e:
-            print("❌ 予期せぬエラー:", e)
+        # 投稿済み保存
+        with open(POSTED_FILE, "a", encoding="utf-8") as f:
+            f.write(link + "\n")
 
-print("✅ 実行完了")
+        posted_links.add(link)
+        posted_count += 1
+
+print(f"✅ 投稿完了：{posted_count} 件")
+
+# ======================
+# テスト投稿（必要な時だけ）
+# ======================
+test_mode = False  # True にするとテスト投稿
+
+if test_mode:
+    print("📝 テスト投稿を実行します...")
+    client.create_tweet(
+        text="📰 KAWAII LAB. NEWS\n【テスト投稿】FRUITS ZIPPER"
+    )
+    print("✅ テスト投稿が完了しました！")
 
 # =========================
 # テスト投稿（必要な時だけ）
