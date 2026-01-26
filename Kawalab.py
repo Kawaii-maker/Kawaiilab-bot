@@ -90,12 +90,8 @@ for rss_url in RSS_URLS:
             # ======================
             text = f"📰 {title}\n{link}"
 
-            text = (
-    "📰 KAWAII LAB. NEWS\n"
-    f"タイトル：{title}\n"
-    f"グループ：{related}\n"
-    f"🔗 {link}"
-)
+            print("🚀 投稿:", title)
+            client.create_tweet(text=text)
 
             # 投稿済み保存
             with open(POSTED_FILE, "a", encoding="utf-8") as f:
@@ -118,4 +114,3 @@ if test_mode:
     print("📝 テスト投稿を実行します...")
     client.create_tweet(text="【テスト】仲川瑠夏歌姫")
     print("✅ テスト投稿が完了しました！")
-        
