@@ -6,6 +6,22 @@ from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 
+ALLOWED_SOURCES = [
+    "Yahoo!ニュース",
+    "Real Sound",
+    "リアルサウンド",
+    "ライブドアニュース",
+    "ORICON NEWS",
+    "オリコン",
+    "ナタリー",
+    "ENCOUNT",
+    "QJWeb",
+    "Quick Japan",
+    "Billboard JAPAN",
+    "モデルプレス",
+    "山陽新聞"
+]
+
 # ======================
 # X API 認証
 # ======================
@@ -64,6 +80,17 @@ for rss_url in RSS_URLS:
         title = entry.title
         link = entry.link
         title_lower = title.lower()
+
+        source_name = ''
+
+        if hasattr(entry, "source") and "title" in entry.source:
+            source_name = entry.source.title
+        else:
+            continue #媒体名が取れない記事はスキップ
+
+        if not any(allowed in source_name for allowed in ALLOWED_SOURCES):
+            continue #指定媒体以外はスキップ
+    
 
         # 公開時間チェック
         if not hasattr(entry, "published_parsed"):
