@@ -3,6 +3,7 @@ import feedparser
 import tweepy
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
+import random
 
 load_dotenv()
 
@@ -10,7 +11,6 @@ ALLOWED_SOURCES = [
     "Yahoo!ニュース",
     "Real Sound",
     "リアルサウンド",
-    "ライブドアニュース",
     "ORICON NEWS",
     "オリコン",
     "ナタリー",
@@ -19,7 +19,6 @@ ALLOWED_SOURCES = [
     "Quick Japan",
     "Billboard JAPAN",
     "モデルプレス",
-    "山陽新聞"
 ]
 
 # ======================
@@ -68,6 +67,18 @@ limit_time = now - timedelta(hours=24)
 
 posted_count = 0
 
+def get_random_image(folder):
+    if not os.path.exists(folder):
+        return None
+    images = [
+        os.path.join(folder,f)
+        for f in os.listdir(folder)
+        if f.lower().endwith((".jpg", ".ping"))
+    ]
+    if not images:
+        return None
+    return random.choice(images)
+
 # ======================
 # RSSチェック開始
 # ======================
@@ -82,6 +93,16 @@ for rss_url in RSS_URLS:
         title_lower = title.lower()
 
         source_name = ''
+
+        image_folder = None
+
+        if "FRUITS ZIPPER" in title_lower:
+         image_folder = "images/FRUITS_ZIPPER"
+        elif "CUTIE STREET" in title_lower:
+          image_folder = "images/CUTIE_STREET"
+        elif "CANDY_TUNE" in title_lower:
+          image_folder = "images/CANDY_TUNE"
+    
 
         if hasattr(entry, "source") and "title" in entry.source:
             source_name = entry.source.title
