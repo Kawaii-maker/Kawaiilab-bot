@@ -21,6 +21,9 @@ ALLOWED_SOURCES = [
     "モデルプレス",
 ]
 
+
+
+
 # ======================
 # X API 認証
 # ======================
@@ -68,16 +71,30 @@ limit_time = now - timedelta(hours=24)
 posted_count = 0
 
 def get_random_image(folder):
-    if not os.path.exists(folder):
+    if not folder or not os.path.exists(folder):
         return None
+
     images = [
-        os.path.join(folder,f)
+        os.path.join(folder, f)
         for f in os.listdir(folder)
-        if f.lower().endwith((".jpg", ".ping"))
+        if f.lower().endswith((".jpg", ".png"))
     ]
+
     if not images:
         return None
+
     return random.choice(images)
+
+auth = tweepy.OAuth1UserHandler(
+    os.getenv("API_KEY"),
+    os.getenv("API_SECRET"),
+    os.getenv("ACCESS_TOKEN"),
+    os.getenv("ACCESS_TOKEN_SECRET")
+)
+
+api_v1 = tweepy.API(auth)
+
+
 
 # ======================
 # RSSチェック開始
@@ -88,67 +105,61 @@ for rss_url in RSS_URLS:
     print("🟦 件数:", len(feed.entries))
 
     for entry in feed.entries:
-        title = entry.title
-        link = entry.link
-        title_lower = title.lower()
+     title = entry.title
+     link = entry.link
+     title_lower = title.lower()
 
-        source_name = ''
+    # 媒体チェック
+    if not hasattr(entry, "source") or "title" not in entry.source:
+        continue
 
-        image_folder = None
+    source_name = entry.source.title
+    if not any(allowed in source_name for allowed in ALLOWED_SOURCES):
+        continue
 
-        if "FRUITS ZIPPER" in title_lower:
-         image_folder = "images/FRUITS_ZIPPER"
-        elif "CUTIE STREET" in title_lower:
-          image_folder = "images/CUTIE_STREET"
-        elif "CANDY_TUNE" in title_lower:
-          image_folder = "images/CANDY_TUNE"
-    
+    # 時間チェック
+    if not hasattr(entry, "published_parsed"):
+        continue
 
-        if hasattr(entry, "source") and "title" in entry.source:
-            source_name = entry.source.title
-        else:
-            continue #媒体名が取れない記事はスキップ
+    published = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+    if published < limit_time:
+        continue
 
-        if not any(allowed in source_name for allowed in ALLOWED_SOURCES):
-            continue #指定媒体以外はスキップ
-    
+    # グループ判定
+    image_folder = None
+    if "fruits zipper" in title_lower:
+        image_folder = "images/fruits_zipper"
+    elif "cutie street" in title_lower:
+        image_folder = "images/cutie_street"
+    elif "candy tune" in title_lower:
+        image_folder = "images/candy_tune"
 
-        # 公開時間チェック
-        if not hasattr(entry, "published_parsed"):
-            continue
+    if link in posted_links:
+        continue
 
-        published = datetime(
-            *entry.published_parsed[:6],
-            tzinfo=timezone.utc
+    text = f"📰 {title}\n{link}"
+    image_path = get_random_image(image_folder)
+
+    print("🚀 投稿:", title)
+    print("🖼 画像:", image_path)
+
+    if image_path:
+        media = api_v1.media_upload(filename=image_path)
+        client.create_tweet(
+            text=text,
+            media_ids=[media.media_id]
         )
+    else:
+        client.create_tweet(text=text)
 
-        if published < limit_time:
-            continue  # 24時間超えは無視
+    with open(POSTED_FILE, "a", encoding="utf-8") as f:
+        f.write(link + "\n")
 
-        print("チェック中:", title)
-
-        # メンバー or グループ名マッチ
-        if any(name in title_lower for name in members):
-
-            if link in posted_links:
-                continue
-
-            # ======================
-            # 投稿内容
-            # ======================
-            text = f"📰 {title}\n{link}"
-
-            print("🚀 投稿:", title)
-            client.create_tweet(text=text)
-
-            # 投稿済み保存
-            with open(POSTED_FILE, "a", encoding="utf-8") as f:
-                f.write(link + "\n")
-
-            posted_links.add(link)
-            posted_count += 1
+    posted_links.add(link)
+    posted_count += 1
 
 print(f"✅ 投稿完了：{posted_count} 件")
+
 
 # =========================
 # テスト投稿（必要な時だけ）
